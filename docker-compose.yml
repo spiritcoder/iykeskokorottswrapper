@@ -2,21 +2,15 @@ networks:
   n8n:
 
 services:
-   # ✅ Kokoro GPU FastAPI
-  kokoro-fastapi-gpu:
-    image: ghcr.io/remsky/kokoro-fastapi-gpu:latest
-    container_name: kokoro-fastapi-gpu
+   # ✅ Kokoro CPU FastAPI
+  kokoro-fastapi-cpu:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: kokoro-fastapi-cpu
     restart: unless-stopped
     networks:
       - n8n
     ports:
       - "8880:8880"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              capabilities: [gpu]
 
   # ✅ KokoroTTS Web Interface
   tts-web:
@@ -28,8 +22,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - KOKORO_API_URL=http://kokoro-fastapi-gpu:8880
+      - KOKORO_API_URL=http://kokoro-fastapi-cpu:8880
     depends_on:
-      - kokoro-fastapi-gpu
+      - kokoro-fastapi-cpu
 volumes:
 
