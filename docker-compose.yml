@@ -23,6 +23,7 @@ services:
       - "3000:3000"
     environment:
       - KOKORO_API_URL=http://kokoro-fastapi-cpu:8880
+      - PORT=3000
     depends_on:
       - kokoro-fastapi-cpu
 
