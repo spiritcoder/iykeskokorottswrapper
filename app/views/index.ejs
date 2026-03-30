@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="Generate high-quality voiceovers with KokoroTTS. Paste your script, pick a voice, and download MP3 audio instantly." />
+  <title>Iyke's KokoroTTS — Voice Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header__brand">
+        <div class="header__icon">🎙</div>
+        <div>
+          <h1 class="header__title">Iyke's KokoroTTS</h1>
+          <p class="header__sub">AI Voice Generator</p>
+        </div>
+      </div>
+      <span class="header__badge">
+        <%= voiceCount %> voices available
+      </span>
+    </header>
+
+    <main class="main">
+      <!-- Script Input -->
+      <section class="card card--script">
+        <label class="card__label" for="script-input">
+          <span class="card__label-icon">📝</span> Your Script
+        </label>
+        <textarea id="script-input" class="textarea" rows="8" placeholder="Paste or type your script here…"></textarea>
+
+      </section>
+
+      <!-- Temperature -->
+      <section class="card card--temperature">
+        <label class="card__label" for="temperature-slider">
+          <span class="card__label-icon">🌡️</span> Voice Temperature
+        </label>
+        <p class="card__hint">Lower values sound more controlled; higher values sound more expressive and varied.</p>
+        <div class="slider-row">
+          <input type="range" id="temperature-slider" class="slider" min="0.1" max="2" step="0.1" value="1" />
+          <span id="temperature-value" class="slider__value">1.0</span>
+        </div>
+      </section>
+
+      <!-- Voice Selector -->
+      <section class="card card--voices">
+        <label class="card__label">
+          <span class="card__label-icon">🎤</span> Select a Voice
+        </label>
+        <p class="card__hint">Click a voice to select it. Use the play button to preview.</p>
+
+        <div class="voice-categories">
+          <% Object.entries(categories).forEach(([category, voices])=> { %>
+            <div class="voice-category">
+              <h3 class="voice-category__title">
+                <%= category %>
+              </h3>
+              <div class="voice-grid">
+                <% voices.forEach(voice=> { %>
+                  <div class="voice-card" data-voice="<%= voice %>">
+                    <div class="voice-card__info">
+                      <span class="voice-card__name">
+                        <%= voice.replace(/^[a-z]{2}_/, '' ).replace(/_/g, ' ' ) %>
+                      </span>
+                      <span class="voice-card__id">
+                        <%= voice %>
+                      </span>
+                    </div>
+                    <button class="voice-card__preview" data-voice="<%= voice %>" title="Preview voice"
+                      aria-label="Preview <%= voice %>">
+                      <svg class="voice-card__play-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5,3 19,12 5,21" />
+                      </svg>
+                      <svg class="voice-card__stop-icon" viewBox="0 0 24 24" fill="currentColor" style="display:none">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                      </svg>
+                      <span class="voice-card__spinner" style="display:none"></span>
+                    </button>
+                  </div>
+                  <% }); %>
+              </div>
+            </div>
+            <% }); %>
+        </div>
+
+        <div id="selected-voice-banner" class="selected-banner" style="display:none">
+          <span>Selected: <strong id="selected-voice-name"></strong></span>
+          <button id="clear-voice" class="selected-banner__clear" title="Clear selection">&times;</button>
+        </div>
+      </section>
+
+      <!-- Generate -->
+      <section class="card card--generate">
+        <button id="generate-btn" class="btn btn--primary" disabled>
+          <span class="btn__text">Generate Voiceover</span>
+          <span class="btn__spinner" style="display:none"></span>
+        </button>
+        <p id="generate-status" class="generate-status"></p>
+
+        <!-- Result player (hidden until generation completes) -->
+        <div id="result-panel" class="result-panel" style="display:none">
+          <audio id="result-audio" class="result-audio" controls preload="auto"></audio>
+          <a id="result-download" class="btn btn--download" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" width="16" height="16">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download MP3
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <!-- Hidden audio element for previews -->
+    <audio id="preview-audio" preload="none"></audio>
+  </div>
+
+  <script>
+    (() => {
+      const scriptInput = document.getElementById('script-input');
+      const generateBtn = document.getElementById('generate-btn');
+      const generateStatus = document.getElementById('generate-status');
+      const previewAudio = document.getElementById('preview-audio');
+      const banner = document.getElementById('selected-voice-banner');
+      const bannerName = document.getElementById('selected-voice-name');
+      const clearBtn = document.getElementById('clear-voice');
+
+      let selectedVoice = null;
+      let currentPreviewVoice = null;
+
+      // ── Temperature slider ───────────────────────────
+      const tempSlider = document.getElementById('temperature-slider');
+      const tempValue = document.getElementById('temperature-value');
+      tempSlider.addEventListener('input', () => {
+        tempValue.textContent = parseFloat(tempSlider.value).toFixed(1);
+      });
+
+      // ── Update generate button state on input ───────
+      scriptInput.addEventListener('input', () => {
+        updateGenerateState();
+      });
+
+      // ── Voice selection ──────────────────────────────
+      document.querySelectorAll('.voice-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          // Don't select when clicking the preview button
+          if (e.target.closest('.voice-card__preview')) return;
+          selectVoice(card.dataset.voice);
+        });
+      });
+
+      function selectVoice(voice) {
+        selectedVoice = voice;
+        document.querySelectorAll('.voice-card').forEach(c => c.classList.remove('voice-card--selected'));
+        const card = document.querySelector(`.voice-card[data-voice="${voice}"]`);
+        if (card) card.classList.add('voice-card--selected');
+        bannerName.textContent = voice;
+        banner.style.display = 'flex';
+        updateGenerateState();
+      }
+
+      clearBtn.addEventListener('click', () => {
+        selectedVoice = null;
+        document.querySelectorAll('.voice-card').forEach(c => c.classList.remove('voice-card--selected'));
+        banner.style.display = 'none';
+        updateGenerateState();
+      });
+
+      function updateGenerateState() {
+        generateBtn.disabled = !(selectedVoice && scriptInput.value.trim().length > 0);
+      }
+
+      // ── Voice preview ────────────────────────────────
+      document.querySelectorAll('.voice-card__preview').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const voice = btn.dataset.voice;
+
+          // If already playing this voice, stop
+          if (currentPreviewVoice === voice && !previewAudio.paused) {
+            previewAudio.pause();
+            previewAudio.currentTime = 0;
+            resetPreviewButton(btn);
+            currentPreviewVoice = null;
+            return;
+          }
+
+          // Stop any other previews
+          if (!previewAudio.paused) {
+            previewAudio.pause();
+            previewAudio.currentTime = 0;
+          }
+          document.querySelectorAll('.voice-card__preview').forEach(b => resetPreviewButton(b));
+
+          // Show loading
+          const playIcon = btn.querySelector('.voice-card__play-icon');
+          const stopIcon = btn.querySelector('.voice-card__stop-icon');
+          const spinner = btn.querySelector('.voice-card__spinner');
+          playIcon.style.display = 'none';
+          spinner.style.display = 'block';
+          btn.disabled = true;
+
+          try {
+            const res = await fetch('/api/preview', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ voice }),
+            });
+
+            if (!res.ok) throw new Error('Preview failed');
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+
+            previewAudio.src = url;
+            currentPreviewVoice = voice;
+
+            previewAudio.onended = () => {
+              resetPreviewButton(btn);
+              currentPreviewVoice = null;
+              URL.revokeObjectURL(url);
+            };
+
+            await previewAudio.play();
+            spinner.style.display = 'none';
+            stopIcon.style.display = 'block';
+            btn.disabled = false;
+          } catch (err) {
+            console.error('Preview error:', err);
+            resetPreviewButton(btn);
+            currentPreviewVoice = null;
+          }
+        });
+      });
+
+      function resetPreviewButton(btn) {
+        const playIcon = btn.querySelector('.voice-card__play-icon');
+        const stopIcon = btn.querySelector('.voice-card__stop-icon');
+        const spinner = btn.querySelector('.voice-card__spinner');
+        playIcon.style.display = 'block';
+        stopIcon.style.display = 'none';
+        spinner.style.display = 'none';
+        btn.disabled = false;
+      }
+
+      // ── Generate ─────────────────────────────────────
+      const resultPanel = document.getElementById('result-panel');
+      const resultAudio = document.getElementById('result-audio');
+      const resultDownload = document.getElementById('result-download');
+      let resultBlobUrl = null;
+
+      generateBtn.addEventListener('click', async () => {
+        if (!selectedVoice || !scriptInput.value.trim()) return;
+
+        // Clean up previous result
+        if (resultBlobUrl) {
+          URL.revokeObjectURL(resultBlobUrl);
+          resultBlobUrl = null;
+        }
+        resultPanel.style.display = 'none';
+        resultAudio.removeAttribute('src');
+
+        generateBtn.disabled = true;
+        generateBtn.querySelector('.btn__text').textContent = 'Generating…';
+        generateBtn.querySelector('.btn__spinner').style.display = 'inline-block';
+        generateStatus.textContent = '';
+        generateStatus.className = 'generate-status';
+
+        try {
+          const res = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: scriptInput.value, voice: selectedVoice, temperature: parseFloat(document.getElementById('temperature-slider').value) }),
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'Generation failed');
+          }
+
+          const blob = await res.blob();
+          resultBlobUrl = URL.createObjectURL(blob);
+
+          // Show player
+          resultAudio.src = resultBlobUrl;
+          resultDownload.href = resultBlobUrl;
+          resultDownload.download = `voiceover_${selectedVoice}_${Date.now()}.mp3`;
+          resultPanel.style.display = 'flex';
+
+          generateStatus.textContent = '✅ Your audio is ready — play it or download below.';
+          generateStatus.className = 'generate-status generate-status--success';
+        } catch (err) {
+          generateStatus.textContent = `❌ ${err.message}`;
+          generateStatus.className = 'generate-status generate-status--error';
+        } finally {
+          generateBtn.disabled = false;
+          generateBtn.querySelector('.btn__text').textContent = 'Generate Voiceover';
+          generateBtn.querySelector('.btn__spinner').style.display = 'none';
+          updateGenerateState();
+        }
+      });
+    })();
+  </script>
+</body>
+
+</html>
