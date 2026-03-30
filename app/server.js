@@ -94,7 +94,7 @@ app.post('/api/preview', async (req, res) => {
         input: 'Hello! This is a preview of my voice. I hope you like how I sound.',
         response_format: 'mp3',
       },
-      { responseType: 'arraybuffer', timeout: 30000 }
+      { responseType: 'arraybuffer', timeout: 0 }
     );
 
     res.set({
@@ -104,6 +104,10 @@ app.post('/api/preview', async (req, res) => {
     res.send(Buffer.from(response.data));
   } catch (err) {
     console.error('Preview error:', err.message);
+    if (err.response) {
+      console.error('  Kokoro status:', err.response.status);
+      console.error('  Kokoro body:', Buffer.from(err.response.data).toString().substring(0, 500));
+    }
     res.status(502).json({ error: 'Failed to generate preview from Kokoro API' });
   }
 });
@@ -132,7 +136,7 @@ app.post('/api/generate', async (req, res) => {
         response_format: 'mp3',
         speed: temp,
       },
-      { responseType: 'arraybuffer', timeout: 200000 }
+      { responseType: 'arraybuffer', timeout: 0 }
     );
 
     const filename = `voiceover_${voice}_${Date.now()}.mp3`;
@@ -144,6 +148,10 @@ app.post('/api/generate', async (req, res) => {
     res.send(Buffer.from(response.data));
   } catch (err) {
     console.error('Generate error:', err.message);
+    if (err.response) {
+      console.error('  Kokoro status:', err.response.status);
+      console.error('  Kokoro body:', Buffer.from(err.response.data).toString().substring(0, 500));
+    }
     res.status(502).json({ error: 'Failed to generate audio from Kokoro API' });
   }
 });
