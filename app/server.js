@@ -114,13 +114,21 @@ app.post('/api/generate', async (req, res) => {
   if (!text || !voice) return res.status(400).json({ error: 'text and voice are required' });
   const temp = parseFloat(temperature) || 1.0;
 
+  // Clean text for Kokoro (it prefers flat, single-line input)
+  const cleanedText = text
+    .replace(/\\/g, '')
+    .replace(/"/g, '\\"')
+    .replace(/\n+/g, ' ')
+    .replace(/\r/g, '')
+    .trim();
+
   try {
     const response = await axios.post(
       `${KOKORO_API_URL}/v1/audio/speech`,
       {
         model: 'kokoro',
         voice,
-        input: text,
+        input: cleanedText,
         response_format: 'mp3',
         speed: temp,
       },
